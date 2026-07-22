@@ -302,4 +302,60 @@ defmodule Phpbb2Crawler do
       Path.join([base, cleaned])
     end
   end
+
+  @doc """
+  Lazily streams topics across all pages of a forum.
+  """
+  def stream_forum_topics(crawler, forum_id, concurrency \\ 4, timeout \\ 15_000) do
+    Stream.resource(
+      fn -> {0, false} end,
+      fn
+        {_, true} -> {:halt, nil}
+        {start, _} ->
+          url = "#{crawler.base_url}/viewforum.php?f=#{forum_id}&start=#{start}"
+          case get_request(crawler, url, timeout) do
+            {:ok, body} ->
+              {topics, next_start} = parse_topics_with_pagination(body, crawler.base_url, forum_id)
+
+              if next_start && next_start > start do
+                Process.sleep(100) # Gentle rate limiting
+                {topics, {next_start, false}}
+              else
+                {topics, {0, true}}
+              end
+            _ ->
+              {:halt, nil}
+          end
+      end,
+      fn _ -> :ok end
+    )
+  end
+
+  @doc """
+  Lazily streams posts across all pages of a topic.
+  """
+  def stream_topic_posts(crawler, topic_id, concurrency \\ 4, timeout \\ 15_000) do
+    Stream.resource(
+      fn -> {0, false} end,
+      fn
+        {_, true} -> {:halt, nil}
+        {start, _} ->
+          url = "#{crawler.base_url}/viewtopic.php?t=#{topic_id}&start=#{start}"
+          case get_request(crawler, url, timeout) do
+            {:ok, body} ->
+              {posts, next_start} = parse_posts_with_pagination(body, topic_id)
+
+              if next_start && next_start > start do
+                Process.sleep(100)
+                {posts, {next_start, false}}
+              else
+                {posts, {0, true}}
+              end
+            _ ->
+              {:halt, nil}
+          end
+      end,
+      fn _ -> :ok end
+    )
+  end
 end
