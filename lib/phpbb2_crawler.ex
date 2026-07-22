@@ -25,7 +25,7 @@ defmodule Phpbb2Crawler do
   @concurrency 4
   @timeout 15_000
 
-  defstruct [:base_url, :cookie,]
+  defstruct [:base_url, :cookie]
 
   @doc """
   Initializes a public (unauthenticated) crawler session.
@@ -292,14 +292,13 @@ defmodule Phpbb2Crawler do
   end
 
   defp build_absolute_url(base_url, relative_path) do
-    uri = URI.parse(base_url)
-    base = "#{uri.scheme}://#{uri.host}"
     cleaned = String.replace_prefix(relative_path || "", "./", "")
 
     if String.starts_with?(cleaned, "http") do
       cleaned
     else
-      Path.join([base, cleaned])
+      normalized_base = if String.ends_with?(base_url, "/"), do: base_url, else: base_url <> "/"
+      URI.merge(normalized_base, cleaned) |> URI.to_string()
     end
   end
 
